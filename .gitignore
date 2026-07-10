@@ -9,3 +9,6 @@ test-results/
 playwright-report/
 coverage/
 *.local
+.env
+*.env
+.env.*
