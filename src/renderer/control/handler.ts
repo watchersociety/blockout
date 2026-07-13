@@ -27,6 +27,56 @@ const flt = (p: Params, k: string): number | undefined =>
 const toRad = (deg: number): number => (deg * Math.PI) / 180
 const toDeg = (rad: number): number => Math.round((rad * 180) / Math.PI)
 
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map((item) => canonical(item)).join(',')}]`
+  const object = value as Record<string, unknown>
+  return `{${Object.keys(object)
+    .filter((key) => object[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonical(object[key])}`)
+    .join(',')}}`
+}
+
+function serializedBoundState(): string {
+  const s = useStore.getState()
+  return canonical({
+    doc: s.doc,
+    projectFolder: s.projectFolder,
+    sceneId: s.sceneId,
+    shotId: s.shotId,
+    time: s.time
+  })
+}
+
+async function currentStateToken(): Promise<string> {
+  // Web Crypto is async. Recheck the serialized state after hashing so the
+  // returned token can never describe a snapshot that changed while awaiting.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const serialized = serializedBoundState()
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized))
+    if (serialized === serializedBoundState()) {
+      return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+    }
+  }
+  throw new Error('Blockout is changing too quickly to bind a reviewed action — stop playback and retry.')
+}
+
+async function requireExpectedState(params: Params): Promise<string | undefined> {
+  const expected = str(params, '_expectedStateToken')
+  if (!expected) return undefined
+  if (!/^[0-9a-f]{64}$/.test(expected) || expected !== (await currentStateToken())) {
+    throw new Error('Blockout state changed after review — inspect and create a new plan.')
+  }
+  return expected
+}
+
+async function recheckExpectedState(expected: string | undefined): Promise<void> {
+  if (expected && expected !== (await currentStateToken())) {
+    throw new Error('Blockout state changed after review — inspect and create a new plan.')
+  }
+}
+
 function requireManager(): NonNullable<ReturnType<typeof getSceneManager>> {
   const m = getSceneManager()
   if (!m) throw new Error('Viewport not ready yet — try again in a moment.')
@@ -39,7 +89,7 @@ function requireDoc(): void {
   }
 }
 
-function summary(): unknown {
+async function summary(): Promise<unknown> {
   const s = useStore.getState()
   const scene = s.scene()
   const shot = s.shot()
@@ -90,15 +140,17 @@ function summary(): unknown {
       : null,
     allShots: scene?.shots.map((sh) => ({ id: sh.id, name: sh.name })) ?? [],
     conventions:
-      'meters; +X right, -Z forward; heading/pan 0 faces -Z; rotationDeg/panDeg clockwise from above'
+      'meters; +X right, -Z forward; heading/pan 0 faces -Z; rotationDeg/panDeg clockwise from above',
+    stateToken: await currentStateToken()
   }
 }
 
 async function execute(action: string, params: Params): Promise<unknown> {
+  const expectedStateToken = action === 'get_state' ? undefined : await requireExpectedState(params)
   const s = useStore.getState()
   switch (action) {
     case 'get_state':
-      return summary()
+      return await summary()
 
     case 'list_assets': {
       const cat = str(params, 'category')
@@ -278,13 +330,14 @@ async function execute(action: string, params: Params): Promise<unknown> {
       requireDoc()
       const presetId = str(params, 'presetId') ?? ''
       const subjectId = str(params, 'entityId')
+      const { CAMERA_MOVE_PRESETS } = await import('@engine/camera-moves')
+      await recheckExpectedState(expectedStateToken)
       if (subjectId) {
         if (!s.scene()?.entities.some((e) => e.id === subjectId)) {
           throw new Error(`No entity "${subjectId}".`)
         }
         s.setSelection({ kind: 'entity', entityId: subjectId })
       }
-      const { CAMERA_MOVE_PRESETS } = await import('@engine/camera-moves')
       if (!CAMERA_MOVE_PRESETS.some((p) => p.id === presetId)) {
         throw new Error(
           `Unknown presetId "${presetId}". Valid: ${CAMERA_MOVE_PRESETS.map((p) => p.id).join(', ')}`
@@ -337,6 +390,7 @@ async function execute(action: string, params: Params): Promise<unknown> {
       const entityId = str(params, 'entityId') ?? ''
       const presetId = str(params, 'presetId') ?? ''
       const { ACTION_PRESETS } = await import('@engine/action-presets')
+      await recheckExpectedState(expectedStateToken)
       const preset = ACTION_PRESETS.find((p) => p.id === presetId)
       if (!preset) {
         throw new Error(
@@ -475,6 +529,9 @@ async function execute(action: string, params: Params): Promise<unknown> {
       if (!result.ok || !result.packagePath) {
         throw new Error(result.error ?? 'Blockout export did not return a package path.')
       }
+      if (expectedStateToken && expectedStateToken !== (await currentStateToken())) {
+        throw new Error('Blockout changed during export; discard the package and create a new plan.')
+      }
       return { packagePath: result.packagePath }
     }
 
@@ -490,6 +547,9 @@ async function execute(action: string, params: Params): Promise<unknown> {
       // Copy the external clip into the project's refs/ folder so it travels
       // with the project and can be served by relative path.
       const imported = await window.blockout.importReference(folder, videoPath)
+      if (expectedStateToken && expectedStateToken !== (await currentStateToken())) {
+        throw new Error('Blockout changed while importing the reference; inspect and create a new plan.')
+      }
       let attached = false
       s.mutate('agent: set reference', (doc) => {
         const scene = doc.scenes.find((sc) => sc.id === useStore.getState().sceneId)

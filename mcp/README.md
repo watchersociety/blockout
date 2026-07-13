@@ -2,6 +2,8 @@
 
 Blockout ships a small [MCP](https://modelcontextprotocol.io) server so an AI agent — **Claude Code, Codex, Hermes, OpenClaw, or any MCP client** — can drive a **running** copy of the app: stage entities, choreograph camera and actor marks, apply camera moves, scrub the timeline, and pull a viewport screenshot. It's the same set of moves you'd make by hand, exposed as tools.
 
+> **Watcher Society factory note:** ordinary factory agents use the Blockout tools exposed by `davinci-resolve-watcher`; they do not register this standalone server. The Watcher facade adds reviewed mutations, approved-root checks, atomic state binding, artifact hashes, and the Seedance/Resolve handoff. The standalone setup below is for independent Blockout use.
+
 This is the agent-integration guide. For the product itself, see the [main README](../README.md).
 
 ---

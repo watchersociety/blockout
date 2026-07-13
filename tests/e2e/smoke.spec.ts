@@ -120,9 +120,35 @@ test('rendering is deterministic: same t → byte-identical frames', async () =>
   expect(report.diffs).toBe(0)
 })
 
+test('control mutations reject a stale reviewed state token', async () => {
+  const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
+  const rpc = async (action: string, params: Record<string, unknown> = {}) => {
+    const response = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${control.token}` },
+      body: JSON.stringify({ action, params })
+    })
+    return await response.json() as { ok: boolean; data?: any; error?: string }
+  }
+  const state = await rpc('get_state')
+  const token = state.data?.stateToken as string
+  expect(token).toMatch(/^[0-9a-f]{64}$/)
+  expect((await rpc('set_time', { t: 1, _expectedStateToken: token })).ok).toBe(true)
+  const stale = await rpc('set_time', { t: 2, _expectedStateToken: token })
+  expect(stale.ok).toBe(false)
+  expect(stale.error).toContain('state changed after review')
+})
+
 test('exports a real package: video + stills + prompt + metadata', async () => {
   test.setTimeout(300_000)
   const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
+  const stateResponse = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${control.token}` },
+    body: JSON.stringify({ action: 'get_state', params: {} })
+  })
+  const state = await stateResponse.json() as { ok: boolean; data?: { stateToken?: string } }
+  expect(state.ok).toBe(true)
   const response = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${control.token}` },
@@ -130,7 +156,7 @@ test('exports a real package: video + stills + prompt + metadata', async () => {
       action: 'export_shot',
       params: {
         profileId: 'seedance-2', clean: true, depth: true, normal: false,
-        labels: 'stillsOnly', resolution: 'auto'
+        labels: 'stillsOnly', resolution: 'auto', _expectedStateToken: state.data?.stateToken
       }
     })
   })

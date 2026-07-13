@@ -11,7 +11,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import http from 'http'
 import crypto from 'crypto'
-import { mkdir, writeFile, rm } from 'fs/promises'
+import { mkdir, writeFile, rename, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 
@@ -36,7 +36,8 @@ export async function startControlServer(getWindow: () => BrowserWindow | null):
   const pending = new Map<string, Pending>()
 
   // Registered ONCE — a per-request listener would leak and double-resolve.
-  ipcMain.on('control:result', (_e, id: string, result: { ok: boolean; data?: unknown; error?: string }) => {
+  ipcMain.on('control:result', (event, id: string, result: { ok: boolean; data?: unknown; error?: string }) => {
+    if (event.sender !== getWindow()?.webContents) return
     const p = pending.get(id)
     if (!p) return
     clearTimeout(p.timer)
@@ -77,10 +78,12 @@ export async function startControlServer(getWindow: () => BrowserWindow | null):
         return
       }
       let body = ''
+      let bodyBytes = 0
       let aborted = false
       req.on('data', (chunk: Buffer) => {
+        bodyBytes += chunk.length
         body += chunk
-        if (body.length > MAX_BODY) {
+        if (bodyBytes > MAX_BODY) {
           aborted = true
           send(413, { ok: false, error: 'request body too large' })
           req.destroy()
@@ -126,15 +129,22 @@ export async function startControlServer(getWindow: () => BrowserWindow | null):
   const addr = server.address()
   const port = typeof addr === 'object' && addr ? addr.port : 0
 
-  await mkdir(CONFIG_DIR, { recursive: true })
+  await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 })
+  const temporaryDiscovery = `${DISCOVERY_FILE}.${process.pid}.tmp`
   await writeFile(
-    DISCOVERY_FILE,
+    temporaryDiscovery,
     JSON.stringify({ port, token, pid: process.pid, startedAt: new Date().toISOString() }),
     { mode: 0o600 }
   )
+  await rename(temporaryDiscovery, DISCOVERY_FILE)
 
   app.on('will-quit', () => {
-    void rm(DISCOVERY_FILE).catch(() => {})
+    void (async () => {
+      try {
+        const current = JSON.parse(await readFile(DISCOVERY_FILE, 'utf8'))
+        if (current?.pid === process.pid && current?.token === token) await rm(DISCOVERY_FILE)
+      } catch {}
+    })()
   })
 
   console.log(`[blockout] control server on 127.0.0.1:${port}`)

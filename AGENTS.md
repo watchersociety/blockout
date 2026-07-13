@@ -68,6 +68,8 @@ Headless/dialog-free driving: launch with env `BLOCKOUT_SMOKE_DIR=/some/dir` —
 
 Blockout ships an MCP server so you can drive a **running** app from Claude Code, Codex, Hermes, or any MCP client — stage entities, drop marks, reframe, scrub, and grab a viewport screenshot without touching the UI.
 
+**Watcher Society video-factory installations:** do not register this standalone MCP alongside `davinci-resolve-watcher`. Gas Town pins Blockout and exposes its safe subset through the existing Watcher Resolve facade, including ordinary `yes` / `no` / `why` review, approved filesystem roots, atomic state-token binding, export hashing, provider handoff, and the rule that grey-box footage never enters the production timeline. The standalone registration below is for independent Blockout use only.
+
 **How it works.** On launch the main process starts a localhost-only HTTP control server (`src/main/control.ts`) on a random port with a bearer token, and writes discovery + auth to `~/.config/blockout/control.json` (`{ port, token, pid }`, mode 0600, deleted on quit). The MCP bridge `mcp/blockout-mcp.mjs` (zero-dependency Node ≥18 stdio server) reads that file and forwards each tool call to the control server, which relays it to the renderer over the `control:invoke` / `control:result` IPC pair. Discovery and auth are automatic — nothing to configure, and if the app isn't running the tools return "Blockout isn't running — launch the app first."
 
 **Register with Claude Code** (one line — use this repo's absolute path):
