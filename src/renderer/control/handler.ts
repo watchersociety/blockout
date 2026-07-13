@@ -10,10 +10,11 @@ import { useStore } from '../store'
 import { ASSET_CATALOG, assetSpec } from '@engine/assets'
 import { createActorMark, createCameraMark } from '@engine/schema'
 import { newId } from '@engine/ids'
-import { renderStillPngForTest } from '../export/exporter'
+import { exportShot, renderStillPngForTest, type ExportResolution } from '../export/exporter'
 import { getSceneManager } from '../export/scene-access'
 import type { AspectId, GaitId } from '@engine/types'
 import type { FramingKind } from '../bus'
+import { BUILTIN_PROFILES } from '@engine/profiles'
 
 type Params = Record<string, unknown>
 type ControlResult = { ok: boolean; data?: unknown; error?: string }
@@ -45,6 +46,7 @@ function summary(): unknown {
   const take = scene?.blocking.find((b) => b.id === shot?.blockingTakeId)
   return {
     project: s.doc?.name ?? null,
+    projectFolder: s.projectFolder,
     mode: s.mode,
     time: s.time,
     scene: scene
@@ -445,6 +447,36 @@ async function execute(action: string, params: Params): Promise<unknown> {
       const bytes = new Uint8Array(png)
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
       return { imageBase64: btoa(binary) }
+    }
+
+    case 'export_shot': {
+      requireDoc()
+      const profileId = str(params, 'profileId') ?? ''
+      if (!BUILTIN_PROFILES.some((profile) => profile.id === profileId)) {
+        throw new Error(`Unknown profileId "${profileId}".`)
+      }
+      const labels = str(params, 'labels') ?? 'stillsOnly'
+      if (!['on', 'stillsOnly', 'off'].includes(labels)) {
+        throw new Error('labels must be on, stillsOnly, or off.')
+      }
+      const resolution = str(params, 'resolution') ?? 'auto'
+      if (!['auto', '720p', '1080p'].includes(resolution)) {
+        throw new Error('resolution must be auto, 720p, or 1080p.')
+      }
+      const result = await exportShot({
+        profileId,
+        passes: {
+          clean: params.clean !== false,
+          depth: params.depth !== false,
+          normal: params.normal === true
+        },
+        labels: labels as 'on' | 'stillsOnly' | 'off',
+        resolution: resolution as ExportResolution
+      })
+      if (!result.ok || !result.packagePath) {
+        throw new Error(result.error ?? 'Blockout export did not return a package path.')
+      }
+      return { packagePath: result.packagePath }
     }
 
     case 'set_reference': {

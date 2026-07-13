@@ -8,7 +8,7 @@
 import { _electron as electron, test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { mkdtempSync, existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { execFileSync } from 'child_process'
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 
 let app: ElectronApplication
@@ -122,16 +122,21 @@ test('rendering is deterministic: same t → byte-identical frames', async () =>
 
 test('exports a real package: video + stills + prompt + metadata', async () => {
   test.setTimeout(300_000)
-  const result = await page.evaluate(async () => {
-    const w = window as unknown as { __blockout: { store: any; exportShot: any } }
-    return await w.__blockout.exportShot({
-      profileId: 'seedance-2',
-      passes: { clean: true, depth: true, normal: false },
-      labels: 'stillsOnly'
+  const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
+  const response = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${control.token}` },
+    body: JSON.stringify({
+      action: 'export_shot',
+      params: {
+        profileId: 'seedance-2', clean: true, depth: true, normal: false,
+        labels: 'stillsOnly', resolution: 'auto'
+      }
     })
   })
-  expect(result.ok, `export failed: ${result.error ?? ''}`).toBe(true)
-  const pkg = result.packagePath as string
+  const envelope = await response.json() as { ok: boolean; data?: { packagePath?: string }; error?: string }
+  expect(envelope.ok, `export failed: ${envelope.error ?? ''}`).toBe(true)
+  const pkg = envelope.data?.packagePath as string
   expect(existsSync(pkg)).toBe(true)
 
   const files = readdirSync(pkg)

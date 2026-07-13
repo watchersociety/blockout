@@ -51,7 +51,7 @@ assets/         (profiles as code in engine/profiles.ts; 3D assets are procedura
 The renderer exposes `window.__blockout` (not a public API — for tests/agents):
 
 - `__blockout.store` — the zustand store. `getState()` gives you every action: `addEntity(assetId, pos)`, `dropActorMark(entityId, pos)`, `dropCameraMark(pos, pan, tilt, focal)`, `setTime(t)`, `setMode(...)`, `mutate(label, fn)`, `scene()`, `shot()`; round-3 additions: `marryEntities(childIds, parentId)` / `unmarryEntities(ids)`, `switchCamera(name)` / `addCameraToShot()` / `clearCameraMarks()`, `saveDraftOfShot()` / `promoteDraft(id)` / `deleteDraft(id)`, `toggleEntitySelected(id)` / `toggleMarkSelected(entityId, markId)`, `setRecording(bool)` (records the selected performer, or the camera — playback-synced when other motion exists).
-- `__blockout.exportShot({profileId, passes, labels})` — run a real export; resolves `{ok, packagePath}`.
+- `__blockout.exportShot({profileId, passes, labels})` — run a real export; resolves `{ok, packagePath}`. The MCP `export_shot` tool drives the same path and returns the package path for a video-factory handoff.
 - `__blockout.renderStillPngForTest(t, w, h)` / `renderRawForTest(t, w, h)` — deterministic frame renders.
 - `window.__blockout_scene` — the live SceneManager (transform gizmo, freeCam, shotCam) for interaction tests; see `tests/e2e/interaction.spec.ts` for real-mouse gizmo-drag and camera-recording patterns.
 
@@ -109,6 +109,7 @@ claude mcp add blockout -- node /Users/eklpse1/Desktop/blockout/mcp/blockout-mcp
 | `screenshot` | — | Current viewport as a PNG (image result) |
 | `list_presets` / `save_preset` / `apply_preset` | — / `name` / `id` | Global stage presets |
 | `set_reference` | `videoPath, mode?, opacity?` | Attach a reference clip (copied into `refs/`) as a ghost/PIP underlay (Motion Previs handoff) |
+| `export_shot` | `profileId, clean?, depth?, normal?, labels?, resolution?` | Export a deterministic generator-reference package; never treat its grey-box reference MP4 as final production footage. |
 
 **Example (Claude Code):**
 

@@ -115,7 +115,7 @@ Point **Claude Code, Codex, Hermes, or any MCP client** at the bundled MCP serve
 claude mcp add blockout -- node /Users/eklpse1/Desktop/blockout/mcp/blockout-mcp.mjs
 ```
 
-Discovery and auth are automatic — the app writes a localhost-only port + bearer token to `~/.config/blockout/control.json` on launch, and the zero-dependency bridge reads it. There are **26 tools** (from `get_state` and `add_entity` through `spawn_sequence`, `apply_camera_move`, and `screenshot`).
+Discovery and auth are automatic — the app writes a localhost-only port + bearer token to `~/.config/blockout/control.json` on launch, and the zero-dependency bridge reads it. There are **27 tools** (from `get_state` and `add_entity` through `spawn_sequence`, `apply_camera_move`, `screenshot`, and deterministic `export_shot`).
 
 👉 **Full setup, the complete tool table, and a worked session: [mcp/README.md](mcp/README.md).**
 

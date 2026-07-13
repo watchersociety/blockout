@@ -328,6 +328,35 @@ const TOOLS = [
       required: ['videoPath'],
       additionalProperties: false
     }
+  },
+  {
+    name: 'export_shot',
+    description:
+      'Export the active shot as a deterministic generator-reference package. Returns the packagePath containing reference/depth/normal video passes, stills, prompt.txt, metadata.json, and README.txt. The project must already be saved. Use the returned reference video as provider input, not as final production footage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        profileId: {
+          type: 'string',
+          description: 'Generator profile id, e.g. "seedance-2", "veo-3.1", "kling-2", "ltx-2.3", or "wan-2.2".'
+        },
+        clean: { type: 'boolean', description: 'Export the clean motion-reference video (default true).' },
+        depth: { type: 'boolean', description: 'Export a depth video pass (default true).' },
+        normal: { type: 'boolean', description: 'Export a normal video pass (default false).' },
+        labels: {
+          type: 'string',
+          enum: ['on', 'stillsOnly', 'off'],
+          description: 'Subject-label policy (default stillsOnly).'
+        },
+        resolution: {
+          type: 'string',
+          enum: ['auto', '720p', '1080p'],
+          description: 'Reference resolution (default auto). Seedance accepts 720p references.'
+        }
+      },
+      required: ['profileId'],
+      additionalProperties: false
+    }
   }
 ]
 

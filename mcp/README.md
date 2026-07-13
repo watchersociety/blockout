@@ -82,7 +82,7 @@ No `env`, no headers, no URL — the bridge discovers the running app on its own
 
 ## Tools
 
-26 tools. Coordinates are in **meters**: `+X` right, `−Z` forward/away from the default camera; **heading 0 faces −Z**; `rotationDeg` / `panDeg` are clockwise seen from above; `tiltDeg` is positive up. Focal lengths are mm on Super 35 (24 wide, 35 normal, 50–85 tight).
+27 tools. Coordinates are in **meters**: `+X` right, `−Z` forward/away from the default camera; **heading 0 faces −Z**; `rotationDeg` / `panDeg` are clockwise seen from above; `tiltDeg` is positive up. Focal lengths are mm on Super 35 (24 wide, 35 normal, 50–85 tight).
 
 | Tool | Params | Does |
 |---|---|---|
@@ -112,6 +112,7 @@ No `env`, no headers, no URL — the bridge discovers the running app on its own
 | `save_preset` | `name` | Save the current staging as a named global preset. |
 | `apply_preset` | `id` | Load a saved stage preset into the current scene. |
 | `set_reference` | `videoPath, mode?, opacity?` | Attach a reference clip (copied into `refs/`) as a ghost/PIP underlay on the active shot (Motion Previs handoff). |
+| `export_shot` | `profileId, clean?, depth?, normal?, labels?, resolution?` | Export the active shot's deterministic reference package and return its local package path. This package is provider input, not final production footage. |
 
 ---
 
