@@ -98,7 +98,6 @@ async function execute(action: string, params: Params): Promise<unknown> {
   const s = useStore.getState()
   switch (action) {
     case 'get_state':
-      requireDoc()
       return summary()
 
     case 'list_assets': {
