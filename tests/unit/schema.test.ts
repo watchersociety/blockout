@@ -95,6 +95,14 @@ describe('prompt generation', () => {
     expect(prompt.length).toBeLessThan(600)
   })
 
+  it('Seedance profile describes the multimodal motion plus identity handoff', () => {
+    const profile = getProfile('seedance-2')
+    expect(profile.maxDuration).toBe(15)
+    expect(profile.refModes).toEqual(['referenceVideo', 'stills'])
+    expect(profile.attachHint).toContain('multimodal reference images')
+    expect(profile.attachHint).toContain('do not also set a strict first frame')
+  })
+
   it('every builtin profile produces a non-empty prompt', () => {
     const { scene, shot } = promptFixture()
     for (const p of BUILTIN_PROFILES) {

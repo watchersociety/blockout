@@ -111,7 +111,7 @@ TheHeist/Scene-01/Shot-1A/export-2026-07-05/
 └── metadata.json             # lenses, marks, timings, labels, machine-readable
 ```
 
-Resolution/fps/duration presets come from the selected **generator profile**, so you never export a 14-second clip for a model that caps at 10.
+Resolution/fps/duration presets come from the selected **generator profile**, so an export cannot exceed that provider's current clip cap.
 
 ### 3.8 Generator handoff
 

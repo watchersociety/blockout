@@ -35,14 +35,14 @@ export const BUILTIN_PROFILES: GeneratorProfile[] = [
     name: 'Seedance 2.0',
     vendor: 'ByteDance',
     kind: 'video',
-    maxDuration: 10,
+    maxDuration: 15,
     recommendedDuration: 5,
     aspects: ['16:9', '9:16', '4:3', '1:1'],
     exportWidth: 1920,
     fps: 24,
-    refModes: ['referenceVideo', 'firstFrame'],
+    refModes: ['referenceVideo', 'stills'],
     attachHint:
-      'Attach the reference MP4 as the motion/video reference and the first-frame still as the image reference.',
+      'Use the reference MP4 for motion. Add polished mark stills or character sheets as multimodal reference images; do not also set a strict first frame.',
     adherenceClause:
       'Precisely match the camera movement, framing, and subject blocking of the attached reference video. Keep subject positions, screen direction, and timing identical to the reference.'
   },

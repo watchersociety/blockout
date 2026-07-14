@@ -20,6 +20,8 @@ Built-ins live in `src/engine/profiles.ts` (`BUILTIN_PROFILES`). Video: Seedance
 
 Profiles with `depthVideo` in `refModes` also get a pre-wired `comfyui-workflow.json` in the export package.
 
+Seedance 2.0 uses `referenceVideo` plus optional `stills` in multimodal-reference mode. The stills should first be polished with the production character/style authority; do not combine this lane with Seedance's separate strict first-frame mode.
+
 ## Adding or updating a profile
 
 1. Edit `BUILTIN_PROFILES` in `src/engine/profiles.ts` (copy the closest existing profile).
