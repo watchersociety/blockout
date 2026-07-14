@@ -435,6 +435,7 @@ function buildQuadruped(assetId: string): BuiltAsset {
 
   const bodyY = legH
   const body = capsule(bodyR, bodyLen - bodyR * 2, 0x87878f)
+  body.name = 'quadruped-body'
   body.rotation.x = Math.PI / 2
   body.position.set(0, bodyY, 0)
   group.add(body)
@@ -461,6 +462,7 @@ function buildQuadruped(assetId: string): BuiltAsset {
 
   // Neck + head at front (-Z).
   const neckPivot = grp(0, bodyY + bodyR * 0.3, legZFront - bodyR * 0.4)
+  neckPivot.name = 'quadruped-head-pivot'
   group.add(neckPivot)
   const neck = capsule(bodyR * 0.5, H * 0.4, 0x84848c)
   neck.rotation.x = 0.6
@@ -486,6 +488,15 @@ function buildQuadruped(assetId: string): BuiltAsset {
   const j: QuadJoints = { legs, head: neckPivot, tail }
   const setTint = makeSetTint(group)
   const animate = (input: AnimInput) => {
+    // Quadrupeds used to ignore crouch/pose overrides completely. That made
+    // agent-authored dog blocking look structurally valid in the timeline
+    // while remaining motionless in the viewport. Keep the simple grey-box
+    // rig, but make its admitted blocking controls visually truthful.
+    const crouched = input.gait === 'crouch'
+    const bodyDrop = crouched ? legH * 0.32 : 0
+    body.position.y = bodyY - bodyDrop
+    neckPivot.position.y = bodyY + bodyR * 0.3 - bodyDrop
+    tail.position.y = bodyY + bodyR * 0.4 - bodyDrop
     const swing = Math.sin(input.phase * TAU)
     const amp = Math.min(1, 0.2 + input.speed * 0.15)
     // Diagonal pairs: FL+BR together, FR+BL opposite.
@@ -494,12 +505,19 @@ function buildQuadruped(assetId: string): BuiltAsset {
     if (legList[3]) legList[3].rotation.x = swing * amp
     if (legList[1]) legList[1].rotation.x = -swing * amp
     if (legList[2]) legList[2].rotation.x = -swing * amp
-    if (input.speed <= 0.01) {
+    for (const leg of legList) {
+      leg.position.y = bodyY - bodyDrop
+      leg.scale.y = crouched ? 0.62 : 1
+    }
+    const headX = input.overrides?.headX ?? 0
+    const headY = input.overrides?.headY ?? 0
+    if (input.speed <= 0.01 && headX === 0) {
       // Idle head bob when standing.
       j.head.rotation.x = Math.sin(input.time * 1.2) * 0.08
     } else {
-      j.head.rotation.x = 0
+      j.head.rotation.x = headX
     }
+    j.head.rotation.y = headY
     j.tail.rotation.x = Math.sin(input.time * 3 + input.phase * TAU) * 0.15
   }
   animate({ gait: 'stand', phase: 0, speed: 0, distance: 0, time: 0 })
@@ -5039,8 +5057,11 @@ function envParkingGarage(group: THREE.Group): EnvResult {
   const S = 28
   const ceilH = 2.6
   group.add(ground(S, S, 0x55555c))
-  // Low ceiling slab.
-  const ceiling = box(S, 0.3, S, 0x6a6a72)
+  // One-sided ceiling: visible from inside/below, culled from the normal
+  // elevated editor camera. An opaque box roof hid every staged subject.
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(S, S), mat(0x6a6a72))
+  ceiling.name = 'editor-cull-ceiling'
+  ceiling.rotation.x = Math.PI / 2
   ceiling.position.y = ceilH
   ceiling.receiveShadow = true
   ceiling.castShadow = false

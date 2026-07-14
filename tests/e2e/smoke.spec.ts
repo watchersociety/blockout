@@ -172,8 +172,8 @@ test('replaces a scene blueprint atomically as one reviewed mutation', async () 
     shot: {
       name: 'Tire canary', duration: 8, fps: 24, aspect: '16:9', notes: 'Editable previs',
       cameraMarks: [
-        { time: 0, x: -4, y: 1.4, z: 3, panDeg: 39, tiltDeg: -5, focalLength: 35 },
-        { time: 8, x: -3.5, y: 1.35, z: 2.5, panDeg: 40, tiltDeg: -5, focalLength: 40 }
+        { time: 0, x: -4, y: 1.4, z: 3, panDeg: -39, tiltDeg: -5, focalLength: 35 },
+        { time: 8, x: -3.5, y: 1.35, z: 2.5, panDeg: -40, tiltDeg: -5, focalLength: 40 }
       ]
     }
   })
