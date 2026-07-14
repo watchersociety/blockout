@@ -4,7 +4,7 @@
  * talks through the typed IPC surface in src/preload.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { spawn, type ChildProcess } from 'child_process'
 import { mkdir, readFile, writeFile, copyFile, access, stat, rm } from 'fs/promises'
 import { join, dirname, basename, extname, resolve, sep } from 'path'
@@ -15,6 +15,11 @@ import { startControlServer } from './control'
 import { version as APP_VERSION } from '../../package.json'
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL
+
+// electron-builder supplies the packaged app identity. Keep development and
+// unpackaged smoke launches consistent so macOS never presents this as the
+// generic "Electron" application in the menu bar or Dock.
+app.setName('Blockout')
 
 let mainWindow: BrowserWindow | null = null
 
@@ -48,6 +53,10 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    const icon = nativeImage.createFromPath(join(app.getAppPath(), 'build/icon.icns'))
+    if (!icon.isEmpty()) app.dock?.setIcon(icon)
+  }
   createWindow()
   registerPresetsIpc()
   void startControlServer(() => mainWindow)
