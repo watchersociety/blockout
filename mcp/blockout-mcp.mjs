@@ -87,6 +87,61 @@ const TOOLS = [
     }
   },
   {
+    name: 'replace_scene',
+    description:
+      'Atomically replace current-scene staging, actor marks, active-shot settings, and camera marks as one undoable blueprint.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        lighting: { type: 'string', enum: ['day', 'goldenHour', 'night', 'interiorWarm', 'interiorCool', 'club'] },
+        entities: {
+          type: 'array', minItems: 1, maxItems: 32,
+          items: {
+            type: 'object',
+            properties: {
+              key: { type: 'string' }, assetId: { type: 'string' }, name: { type: 'string' }, label: { type: 'string' },
+              x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' }, rotationDeg: { type: 'number' },
+              marks: {
+                type: 'array', maxItems: 32,
+                items: {
+                  type: 'object',
+                  properties: {
+                    time: { type: 'number' }, x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' },
+                    gait: { type: 'string', enum: ['stand', 'walk', 'jog', 'run', 'sit', 'lie', 'crouch', 'gesture', 'fall'] },
+                    arriveHeadingDeg: { type: 'number' },
+                    joints: { type: 'object', additionalProperties: { type: 'number' } }
+                  },
+                  required: ['time', 'x', 'z'], additionalProperties: false
+                }
+              }
+            },
+            required: ['key', 'assetId', 'x', 'z'], additionalProperties: false
+          }
+        },
+        shot: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' }, duration: { type: 'number' }, fps: { type: 'number', enum: [24, 25, 30] },
+            aspect: { type: 'string', enum: ['16:9', '9:16', '2.39:1', '4:3', '1:1'] }, notes: { type: 'string' },
+            cameraMarks: {
+              type: 'array', minItems: 1, maxItems: 32,
+              items: {
+                type: 'object',
+                properties: {
+                  time: { type: 'number' }, x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' },
+                  panDeg: { type: 'number' }, tiltDeg: { type: 'number' }, focalLength: { type: 'number' }
+                },
+                required: ['time', 'x', 'y', 'z', 'panDeg', 'tiltDeg', 'focalLength'], additionalProperties: false
+              }
+            }
+          },
+          required: ['duration', 'fps', 'aspect', 'cameraMarks'], additionalProperties: false
+        }
+      },
+      required: ['entities', 'shot'], additionalProperties: false
+    }
+  },
+  {
     name: 'add_actor_mark',
     description:
       'Drop a timeline mark for an actor entity: at time t (seconds) the actor is at x,z. Chain marks to choreograph a walk. gait sets the movement style between marks.',

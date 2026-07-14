@@ -8,7 +8,7 @@
 
 import { useStore } from '../store'
 import { ASSET_CATALOG, assetSpec } from '@engine/assets'
-import { createActorMark, createCameraMark } from '@engine/schema'
+import { createActorMark, createCameraMark, createEntity } from '@engine/schema'
 import { newId } from '@engine/ids'
 import { exportShot, renderStillPngForTest, type ExportResolution } from '../export/exporter'
 import { getSceneManager } from '../export/scene-access'
@@ -228,6 +228,176 @@ async function execute(action: string, params: Params): Promise<unknown> {
       if (!found) throw new Error(`No entity "${entityId}".`)
       if (useStore.getState().selection?.kind === 'entity') s.setSelection(null)
       return { deleted: entityId }
+    }
+
+    case 'replace_scene': {
+      requireDoc()
+      const rawEntities = params.entities
+      const rawShot = params.shot
+      if (!Array.isArray(rawEntities) || rawEntities.length < 1 || rawEntities.length > 32) {
+        throw new Error('entities must contain 1–32 scene entities.')
+      }
+      if (!rawShot || typeof rawShot !== 'object' || Array.isArray(rawShot)) {
+        throw new Error('shot must be an object.')
+      }
+      const entityKeys = new Set<string>()
+      const entities = rawEntities.map((raw, index) => {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+          throw new Error(`entities[${index}] must be an object.`)
+        }
+        const value = raw as Params
+        const key = str(value, 'key') ?? ''
+        const assetId = str(value, 'assetId') ?? ''
+        if (!/^[a-z][a-z0-9_-]{0,31}$/.test(key) || entityKeys.has(key)) {
+          throw new Error(`entities[${index}].key must be unique and machine-safe.`)
+        }
+        if (!ASSET_CATALOG.some((asset) => asset.id === assetId)) {
+          throw new Error(`entities[${index}] has unknown assetId "${assetId}".`)
+        }
+        entityKeys.add(key)
+        const marksRaw = value.marks ?? []
+        if (!Array.isArray(marksRaw) || marksRaw.length > 32) {
+          throw new Error(`entities[${index}].marks must contain at most 32 marks.`)
+        }
+        const marks = marksRaw.map((rawMark, markIndex) => {
+          if (!rawMark || typeof rawMark !== 'object' || Array.isArray(rawMark)) {
+            throw new Error(`entities[${index}].marks[${markIndex}] must be an object.`)
+          }
+          const mark = rawMark as Params
+          const gait = (str(mark, 'gait') ?? 'stand') as GaitId
+          if (!['stand', 'walk', 'jog', 'run', 'sit', 'lie', 'crouch', 'gesture', 'fall'].includes(gait)) {
+            throw new Error(`entities[${index}].marks[${markIndex}] has an invalid gait.`)
+          }
+          const jointsRaw = mark.joints
+          let joints: Record<string, number> | undefined
+          if (jointsRaw !== undefined) {
+            if (!jointsRaw || typeof jointsRaw !== 'object' || Array.isArray(jointsRaw)) {
+              throw new Error(`entities[${index}].marks[${markIndex}].joints must be an object.`)
+            }
+            const entries = Object.entries(jointsRaw)
+            if (entries.length > 32 || entries.some(([name, amount]) =>
+              !/^[a-zA-Z][a-zA-Z0-9]{0,31}$/.test(name)
+              || typeof amount !== 'number' || !isFinite(amount) || Math.abs(amount) > Math.PI)) {
+              throw new Error(`entities[${index}].marks[${markIndex}].joints is invalid.`)
+            }
+            joints = Object.fromEntries(entries) as Record<string, number>
+          }
+          return {
+            time: flt(mark, 'time') ?? 0,
+            x: flt(mark, 'x') ?? 0,
+            y: flt(mark, 'y') ?? 0,
+            z: flt(mark, 'z') ?? 0,
+            gait,
+            arriveHeadingDeg: flt(mark, 'arriveHeadingDeg'),
+            joints
+          }
+        })
+        return {
+          key,
+          assetId,
+          name: str(value, 'name'),
+          label: str(value, 'label'),
+          x: flt(value, 'x') ?? 0,
+          y: flt(value, 'y') ?? 0,
+          z: flt(value, 'z') ?? 0,
+          rotationDeg: flt(value, 'rotationDeg') ?? 0,
+          marks
+        }
+      })
+      const shotValue = rawShot as Params
+      const duration = flt(shotValue, 'duration') ?? 8
+      const fps = flt(shotValue, 'fps') ?? 24
+      const aspect = (str(shotValue, 'aspect') ?? '16:9') as AspectId
+      const cameraMarksRaw = shotValue.cameraMarks
+      if (duration < 0.5 || duration > 600 || ![24, 25, 30].includes(fps)
+          || !['16:9', '9:16', '2.39:1', '4:3', '1:1'].includes(aspect)
+          || !Array.isArray(cameraMarksRaw) || cameraMarksRaw.length < 1 || cameraMarksRaw.length > 32) {
+        throw new Error('shot duration, fps, aspect, or cameraMarks is invalid.')
+      }
+      const cameraMarks = cameraMarksRaw.map((rawMark, index) => {
+        if (!rawMark || typeof rawMark !== 'object' || Array.isArray(rawMark)) {
+          throw new Error(`shot.cameraMarks[${index}] must be an object.`)
+        }
+        const mark = rawMark as Params
+        return {
+          time: flt(mark, 'time') ?? 0,
+          x: flt(mark, 'x') ?? 0,
+          y: flt(mark, 'y') ?? 1.6,
+          z: flt(mark, 'z') ?? 4,
+          panDeg: flt(mark, 'panDeg') ?? 0,
+          tiltDeg: flt(mark, 'tiltDeg') ?? 0,
+          focalLength: flt(mark, 'focalLength') ?? 35
+        }
+      })
+      if (entities.some((entity) => entity.marks.some((mark) => mark.time < 0 || mark.time > duration))
+          || cameraMarks.some((mark) => mark.time < 0 || mark.time > duration)) {
+        throw new Error('all entity and camera marks must fall within the shot duration.')
+      }
+      const lighting = str(params, 'lighting')
+      if (lighting && !['day', 'goldenHour', 'night', 'interiorWarm', 'interiorCool', 'club'].includes(lighting)) {
+        throw new Error('lighting is invalid.')
+      }
+      const scene = s.scene()
+      const shot = s.shot()
+      const take = scene?.blocking.find((candidate) => candidate.id === shot?.blockingTakeId)
+      if (!scene || !shot || !take) throw new Error('No current scene, shot, or blocking take.')
+      const created = entities.map((value) => {
+        const entity = createEntity(value.assetId, value.name || assetSpec(value.assetId)!.name, {
+          x: value.x, y: value.y, z: value.z
+        })
+        entity.transform.rotationY = toRad(value.rotationDeg)
+        if (value.label) entity.label = { text: value.label, color: '#3b82f6' }
+        return { value, entity }
+      })
+      s.mutate('agent: replace scene blueprint', (doc) => {
+        const targetScene = doc.scenes.find((candidate) => candidate.id === scene.id)
+        const targetShot = targetScene?.shots.find((candidate) => candidate.id === shot.id)
+        const targetTake = targetScene?.blocking.find((candidate) => candidate.id === take.id)
+        if (!targetScene || !targetShot || !targetTake) return
+        targetScene.entities = created.map(({ entity }) => entity)
+        for (const candidate of targetScene.blocking) candidate.tracks = []
+        targetTake.tracks = created
+          .filter(({ value }) => value.marks.length > 0)
+          .map(({ value, entity }) => ({
+            entityId: entity.id,
+            marks: value.marks.map((valueMark) => {
+              const mark = createActorMark(
+                { x: valueMark.x, y: valueMark.y, z: valueMark.z },
+                valueMark.time,
+                valueMark.gait
+              )
+              if (valueMark.arriveHeadingDeg !== undefined) {
+                mark.arriveHeading = toRad(valueMark.arriveHeadingDeg)
+              }
+              if (valueMark.joints) mark.joints = valueMark.joints
+              return mark
+            })
+          }))
+        targetShot.name = str(shotValue, 'name') || targetShot.name
+        targetShot.duration = duration
+        targetShot.fps = fps
+        targetShot.aspect = aspect
+        targetShot.notes = str(shotValue, 'notes')
+        targetShot.camera.marks = cameraMarks.map((valueMark) => createCameraMark(
+          { x: valueMark.x, y: valueMark.y, z: valueMark.z },
+          valueMark.time,
+          toRad(valueMark.panDeg),
+          toRad(valueMark.tiltDeg),
+          valueMark.focalLength
+        ))
+        delete targetShot.camera.mountEntityId
+        delete targetShot.camera.trackEntityId
+        if (lighting) targetScene.environment.lighting = lighting as typeof targetScene.environment.lighting
+      })
+      s.setSelection(null)
+      s.setTime(0)
+      return {
+        replaced: true,
+        entityIds: Object.fromEntries(created.map(({ value, entity }) => [value.key, entity.id])),
+        entityCount: created.length,
+        cameraMarkCount: cameraMarks.length,
+        duration
+      }
     }
 
     case 'add_actor_mark': {

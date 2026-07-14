@@ -140,6 +140,42 @@ test('control mutations reject a stale reviewed state token', async () => {
   expect(stale.error).toContain('state changed after review')
 })
 
+test('replaces a scene blueprint atomically as one reviewed mutation', async () => {
+  const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
+  const rpc = async (action: string, params: Record<string, unknown> = {}) => {
+    const response = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${control.token}` },
+      body: JSON.stringify({ action, params })
+    })
+    return await response.json() as { ok: boolean; data?: any; error?: string }
+  }
+  const before = await rpc('get_state')
+  const replaced = await rpc('replace_scene', {
+    _expectedStateToken: before.data?.stateToken,
+    lighting: 'interiorWarm',
+    entities: [
+      { key: 'dog', assetId: 'animal.dog', name: 'DIY Doggie', label: 'DIY DOGGIE', x: -1, z: -2,
+        marks: [{ time: 0, x: -1, z: -2, gait: 'crouch' }, { time: 4, x: -1, z: -2, gait: 'gesture', joints: { headX: 0.2 } }] },
+      { key: 'car', assetId: 'vehicle.sedan', name: 'Parked car', x: 1.2, z: -2 },
+      { key: 'garage', assetId: 'env.parkingGarage', name: 'Garage', x: 0, z: 0 }
+    ],
+    shot: {
+      name: 'Tire canary', duration: 8, fps: 24, aspect: '16:9', notes: 'Editable previs',
+      cameraMarks: [
+        { time: 0, x: -4, y: 1.4, z: 3, panDeg: 39, tiltDeg: -5, focalLength: 35 },
+        { time: 8, x: -3.5, y: 1.35, z: 2.5, panDeg: 40, tiltDeg: -5, focalLength: 40 }
+      ]
+    }
+  })
+  expect(replaced.ok, replaced.error ?? '').toBe(true)
+  expect(replaced.data?.entityCount).toBe(3)
+  expect(replaced.data?.cameraMarkCount).toBe(2)
+  const after = await rpc('get_state')
+  expect(after.data?.scene.entities.map((entity: any) => entity.name)).toEqual(['DIY Doggie', 'Parked car', 'Garage'])
+  expect(after.data?.shot).toMatchObject({ name: 'Tire canary', duration: 8, fps: 24, aspect: '16:9' })
+})
+
 test('exports a real package: video + stills + prompt + metadata', async () => {
   test.setTimeout(300_000)
   const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
