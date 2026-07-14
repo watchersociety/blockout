@@ -6,7 +6,7 @@
  */
 
 import { _electron as electron, test, expect, type ElectronApplication, type Page } from '@playwright/test'
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'fs'
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { execFileSync } from 'child_process'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -164,16 +164,23 @@ test('replaces a scene blueprint atomically as one reviewed mutation', async () 
     _expectedStateToken: before.data?.stateToken,
     lighting: 'interiorWarm',
     entities: [
-      { key: 'dog', assetId: 'animal.dog', name: 'DIY Doggie', label: 'DIY DOGGIE', x: -1, z: -2,
-        marks: [{ time: 0, x: -1, z: -2, gait: 'crouch' }, { time: 4, x: -1, z: -2, gait: 'gesture', joints: { headX: 0.2 } }] },
+      { key: 'dog', assetId: 'animal.dog', name: 'DIY Doggie', x: -0.95, z: -3.4,
+        marks: [
+          { time: 0, x: -0.95, z: -3.4, heading: 0.45, gait: 'crouch', joints: { headX: -0.08 } },
+          { time: 2, x: -0.95, z: -3.4, heading: 0.45, gait: 'crouch', joints: { headX: -0.08 } },
+          { time: 3.2, x: -0.95, z: -3.4, heading: 0.45, gait: 'crouch', joints: { headX: 0.16 } },
+          { time: 4.2, x: -0.95, z: -3.4, heading: 0.45, gait: 'crouch', joints: { headX: -0.08 } },
+          { time: 6.2, x: -0.95, z: -3.4, heading: -0.3, gait: 'crouch', joints: { headX: 0.08 } },
+          { time: 8, x: -0.95, z: -3.4, heading: -0.3, gait: 'crouch', joints: { headX: -0.08 } }
+        ] },
       { key: 'car', assetId: 'vehicle.sedan', name: 'Parked car', x: 1.2, z: -2 },
       { key: 'garage', assetId: 'env.parkingGarage', name: 'Garage', x: 0, z: 0 }
     ],
     shot: {
       name: 'Tire canary', duration: 8, fps: 24, aspect: '16:9', notes: 'Editable previs',
       cameraMarks: [
-        { time: 0, x: -4, y: 1.4, z: 3, panDeg: -39, tiltDeg: -5, focalLength: 35 },
-        { time: 8, x: -3.5, y: 1.35, z: 2.5, panDeg: -40, tiltDeg: -5, focalLength: 40 }
+        { time: 0, x: -6, y: 1.7, z: 4.5, panDeg: -42, tiltDeg: -7, focalLength: 35 },
+        { time: 8, x: -5.5, y: 1.65, z: 4, panDeg: -42, tiltDeg: -7, focalLength: 40 }
       ]
     }
   })
@@ -183,6 +190,30 @@ test('replaces a scene blueprint atomically as one reviewed mutation', async () 
   const after = await rpc('get_state')
   expect(after.data?.scene.entities.map((entity: any) => entity.name)).toEqual(['DIY Doggie', 'Parked car', 'Garage'])
   expect(after.data?.shot).toMatchObject({ name: 'Tire canary', duration: 8, fps: 24, aspect: '16:9' })
+})
+
+test('proves the replacement shot changes visibly at representative marks', async () => {
+  const control = JSON.parse(readFileSync(controlFile(), 'utf-8'))
+  const rpc = async (action: string, params: Record<string, unknown> = {}) => {
+    const response = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${control.token}` },
+      body: JSON.stringify({ action, params })
+    })
+    return await response.json() as { ok: boolean; data?: any; error?: string }
+  }
+  const frames: Buffer[] = []
+  for (const [label, t] of [['opening', 0], ['action', 6.2], ['ending', 8]] as const) {
+    expect((await rpc('set_time', { t })).ok).toBe(true)
+    const shot = await rpc('screenshot')
+    expect(shot.ok, shot.error ?? '').toBe(true)
+    const png = Buffer.from(shot.data?.imageBase64 ?? '', 'base64')
+    expect(png.length).toBeGreaterThan(10_000)
+    writeFileSync(join(smokeDir, `visual-${label}.png`), png)
+    frames.push(png)
+  }
+  expect(Buffer.compare(frames[0]!, frames[1]!)).not.toBe(0)
+  expect(Buffer.compare(frames[1]!, frames[2]!)).not.toBe(0)
 })
 
 test('exports a real package: video + stills + prompt + metadata', async () => {
@@ -246,7 +277,7 @@ test('exports a real package: video + stills + prompt + metadata', async () => {
 
   // Prompt reflects the active replacement scene and lens.
   const prompt = readFileSync(join(pkg, 'prompt.txt'), 'utf-8')
-  expect(prompt).toContain('DIY DOGGIE')
+  expect(prompt).toContain('a dog')
   expect(prompt).toContain('35mm')
 
   // Metadata is valid JSON with both camera marks.
