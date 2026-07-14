@@ -1720,6 +1720,24 @@ function MarkInspector({
 
       {cameraMark && (
         <div className="panel-section">
+          <button
+            className="btn primary"
+            style={{ width: '100%' }}
+            onClick={() => {
+              useStore.getState().setTime(cameraMark.time)
+              setSelection({ kind: 'camera' })
+            }}
+          >
+            Edit camera pose at this mark
+          </button>
+          <p style={{ color: 'var(--text-faint)', fontSize: 11, lineHeight: 1.4, marginTop: 7 }}>
+            Jumps to this keyframe and selects the camera. Move or rotate it to change this pose only.
+          </p>
+        </div>
+      )}
+
+      {cameraMark && (
+        <div className="panel-section">
           <div className="panel-title">Optics</div>
           <div className="field">
             <label>Focal length (mm)</label>

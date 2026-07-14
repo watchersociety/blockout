@@ -216,6 +216,35 @@ test('proves the replacement shot changes visibly at representative marks', asyn
   expect(Buffer.compare(frames[1]!, frames[2]!)).not.toBe(0)
 })
 
+test('selecting a camera keyframe jumps there before camera editing', async () => {
+  const result = await page.evaluate(() => {
+    const w = window as unknown as { __blockout: { store: any } }
+    const store = w.__blockout.store.getState()
+    const start = [...store.shot().camera.marks].sort((a: any, b: any) => a.time - b.time)[0]
+    store.setTime(7)
+    store.setPlaying(true)
+    store.setSelection({ kind: 'mark', entityId: 'camera', markId: start.id })
+    return {
+      startTime: start.time,
+      selectedTime: w.__blockout.store.getState().time,
+      playing: w.__blockout.store.getState().playing
+    }
+  })
+  expect(result.selectedTime).toBe(result.startTime)
+  expect(result.playing).toBe(false)
+
+  const edit = page.getByRole('button', { name: 'Edit camera pose at this mark' })
+  await expect(edit).toBeVisible()
+  await edit.click()
+  const selected = await page.evaluate(() => {
+    const w = window as unknown as { __blockout: { store: any } }
+    const state = w.__blockout.store.getState()
+    return { selection: state.selection, time: state.time }
+  })
+  expect(selected.selection).toEqual({ kind: 'camera' })
+  expect(selected.time).toBe(result.startTime)
+})
+
 test('exports a real package: video + stills + prompt + metadata', async () => {
   test.setTimeout(300_000)
   const control = JSON.parse(readFileSync(controlFile(), 'utf-8'))

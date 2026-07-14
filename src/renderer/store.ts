@@ -286,7 +286,24 @@ export const useStore = create<BlockoutState>((set, get) => ({
     if (get().exportProgress.running) return
     set({ shotId, time: 0, playing: false })
   },
-  setSelection: (selection) => set({ selection, droppingMarks: false }),
+  setSelection(selection) {
+    if (selection?.kind === 'mark') {
+      const scene = get().scene()
+      const shot = get().shot()
+      const take = scene?.blocking.find((b) => b.id === shot?.blockingTakeId)
+      const mark =
+        selection.entityId === 'camera'
+          ? shot?.camera.marks.find((m) => m.id === selection.markId)
+          : take?.tracks
+              .find((track) => track.entityId === selection.entityId)
+              ?.marks.find((m) => m.id === selection.markId)
+      if (mark) {
+        set({ selection, droppingMarks: false, time: mark.time, playing: false })
+        return
+      }
+    }
+    set({ selection, droppingMarks: false })
+  },
   setPlacingAsset: (placingAssetId) => set({ placingAssetId, placingSequence: null }),
   setPlacingSequence: (placingSequence) => set({ placingSequence, placingAssetId: null }),
   setDroppingMarks: (droppingMarks) => set({ droppingMarks }),
