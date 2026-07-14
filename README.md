@@ -76,7 +76,7 @@ Coverage the way a real set works: the **scene** owns the blocking, each **shot*
 
 ### Deliver
 
-Data-driven **generator profiles** define durations, resolutions, reference modes, and prompt templates per model; adding a new generator is a config edit. Exports are **deterministic** — the timeline is stepped at exact fps and rendered offline, so the same project exports byte-identical frames on every run. Projects are a folder of pretty-printed, stable-key-order JSON: diff it, branch it, review it.
+Data-driven **generator profiles** define durations, resolutions, reference modes, and prompt templates per model; adding a new generator is a config edit. Exports are **deterministic** — the timeline is stepped at exact fps and rendered offline, so the same project exports byte-identical frames on every run. Projects are a folder of pretty-printed, stable-key-order JSON: diff it, branch it, review it. Blockout automatically reopens the last valid project on launch; if that project was moved, deleted, or cannot be read, it safely returns to the welcome screen.
 
 ### Sequences & presets
 

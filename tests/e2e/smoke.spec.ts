@@ -6,20 +6,29 @@
  */
 
 import { _electron as electron, test, expect, type ElectronApplication, type Page } from '@playwright/test'
-import { mkdtempSync, existsSync, readFileSync, readdirSync, statSync } from 'fs'
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { execFileSync } from 'child_process'
-import { homedir, tmpdir } from 'os'
+import { tmpdir } from 'os'
 import { join } from 'path'
 
 let app: ElectronApplication
 let page: Page
 let smokeDir: string
+let smokeHome: string
+let smokeUserData: string
+
+function controlFile(): string {
+  return join(smokeHome, '.config', 'blockout', 'control.json')
+}
 
 test.beforeAll(async () => {
   smokeDir = mkdtempSync(join(tmpdir(), 'blockout-smoke-'))
+  smokeHome = join(smokeDir, 'home')
+  smokeUserData = join(smokeDir, 'user-data')
+  mkdirSync(smokeHome)
   app = await electron.launch({
-    args: ['out/main/index.js'],
-    env: { ...process.env, BLOCKOUT_SMOKE_DIR: smokeDir }
+    args: ['out/main/index.js', `--user-data-dir=${smokeUserData}`],
+    env: { ...process.env, HOME: smokeHome, BLOCKOUT_SMOKE_DIR: smokeDir }
   })
   page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
@@ -122,7 +131,7 @@ test('rendering is deterministic: same t → byte-identical frames', async () =>
 })
 
 test('control mutations reject a stale reviewed state token', async () => {
-  const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
+  const control = JSON.parse(readFileSync(controlFile(), 'utf-8'))
   const rpc = async (action: string, params: Record<string, unknown> = {}) => {
     const response = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
       method: 'POST',
@@ -141,7 +150,7 @@ test('control mutations reject a stale reviewed state token', async () => {
 })
 
 test('replaces a scene blueprint atomically as one reviewed mutation', async () => {
-  const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
+  const control = JSON.parse(readFileSync(controlFile(), 'utf-8'))
   const rpc = async (action: string, params: Record<string, unknown> = {}) => {
     const response = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
       method: 'POST',
@@ -178,7 +187,7 @@ test('replaces a scene blueprint atomically as one reviewed mutation', async () 
 
 test('exports a real package: video + stills + prompt + metadata', async () => {
   test.setTimeout(300_000)
-  const control = JSON.parse(readFileSync(join(homedir(), '.config', 'blockout', 'control.json'), 'utf-8'))
+  const control = JSON.parse(readFileSync(controlFile(), 'utf-8'))
   const stateResponse = await fetch(`http://127.0.0.1:${control.port}/rpc`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${control.token}` },
@@ -211,7 +220,8 @@ test('exports a real package: video + stills + prompt + metadata', async () => {
   expect(files).toContain('metadata.json')
   expect(files).toContain('README.txt')
 
-  // Video correctness via ffprobe: duration ≈ 5s, 24fps, correct resolution.
+  // Video correctness via ffprobe: the replaced canary shot is 8s, 24fps,
+  // at the profile's expected resolution.
   const probe = JSON.parse(
     execFileSync('ffprobe', [
       '-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_format',
@@ -219,8 +229,8 @@ test('exports a real package: video + stills + prompt + metadata', async () => {
     ]).toString()
   )
   const stream = probe.streams.find((s: any) => s.codec_type === 'video')
-  expect(Number(probe.format.duration)).toBeGreaterThan(4.7)
-  expect(Number(probe.format.duration)).toBeLessThan(5.3)
+  expect(Number(probe.format.duration)).toBeGreaterThan(7.7)
+  expect(Number(probe.format.duration)).toBeLessThan(8.3)
   expect(stream.width).toBe(1920)
   expect(stream.height).toBe(1080)
   expect(stream.avg_frame_rate).toBe('24/1')
@@ -234,13 +244,25 @@ test('exports a real package: video + stills + prompt + metadata', async () => {
   expect(stills.some((f) => f.includes('mark-2'))).toBe(true)
   expect(stills.some((f) => f.includes('topdown'))).toBe(true)
 
-  // Prompt mentions the labeled subject and the lens.
+  // Prompt reflects the active replacement scene and lens.
   const prompt = readFileSync(join(pkg, 'prompt.txt'), 'utf-8')
-  expect(prompt).toContain('HERO')
+  expect(prompt).toContain('DIY DOGGIE')
   expect(prompt).toContain('35mm')
 
   // Metadata is valid JSON with both camera marks.
   const meta = JSON.parse(readFileSync(join(pkg, 'metadata.json'), 'utf-8'))
   expect(meta.cameraMarks.length).toBe(2)
   expect(meta.shot.fps).toBe(24)
+})
+
+test('reopens the last valid project on the next launch', async () => {
+  await app.close()
+  app = await electron.launch({
+    args: ['out/main/index.js', `--user-data-dir=${smokeUserData}`],
+    env: { ...process.env, HOME: smokeHome, BLOCKOUT_SMOKE_DIR: smokeDir }
+  })
+  page = await app.firstWindow()
+  await page.waitForLoadState('domcontentloaded')
+  await expect(page.locator('.mode-switch')).toBeVisible()
+  await expect(page.getByText('Smoke', { exact: true })).toBeVisible()
 })

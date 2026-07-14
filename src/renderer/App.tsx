@@ -3,7 +3,7 @@
  * Stage/Shoot/Deliver layouts, global keyboard map, and autosave.
  */
 
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore, currentProjectJson } from './store'
 import { Viewport } from './viewport/Viewport'
 import { Library } from './panels/Library'
@@ -62,6 +62,61 @@ function Welcome(): JSX.Element {
   const newProject = useStore((s) => s.newProject)
   const loadFromJson = useStore((s) => s.loadFromJson)
   const toast = useStore((s) => s.toast)
+  const startupAttempted = useRef(false)
+  const [reopening, setReopening] = useState(true)
+
+  const rememberFolder = useCallback(async (folder: string): Promise<void> => {
+    try {
+      await window.blockout.rememberLastProject(folder)
+    } catch {
+      toast('Project opened, but Blockout could not remember it for next launch.', 'error')
+    }
+  }, [toast])
+
+  const loadFolder = useCallback(async (folder: string): Promise<boolean> => {
+    try {
+      const { json, backupJson, backupNewer } = await window.blockout.loadProject(folder)
+      if (!json && !backupJson) {
+        toast('No project.json found in that folder.', 'error')
+        return false
+      }
+      // A meaningfully-newer autosave means the app died with unsaved work —
+      // restore it (undo history is fresh either way; ⌘S makes it permanent).
+      if (backupNewer && backupJson && loadFromJson(folder, backupJson)) {
+        await rememberFolder(folder)
+        toast('Restored unsaved work from the autosave backup — Save to keep it.', 'success')
+        return true
+      }
+      if (json && loadFromJson(folder, json)) {
+        await rememberFolder(folder)
+        return true
+      }
+      if (backupJson && loadFromJson(folder, backupJson)) {
+        await rememberFolder(folder)
+        toast('Recovered from autosave backup.', 'success')
+        return true
+      }
+      return false
+    } catch {
+      toast('Could not open that project.', 'error')
+      return false
+    }
+  }, [loadFromJson, rememberFolder, toast])
+
+  useEffect(() => {
+    if (startupAttempted.current) return
+    startupAttempted.current = true
+    void (async () => {
+      try {
+        const folder = await window.blockout.getLastProject()
+        if (folder && !(await loadFolder(folder))) await window.blockout.clearLastProject()
+      } catch {
+        toast('Could not restore the last project; choose a project to continue.', 'error')
+      } finally {
+        setReopening(false)
+      }
+    })()
+  }, [loadFolder, toast])
 
   const onNew = useCallback(async () => {
     const folder = await window.blockout.newProjectDialog()
@@ -69,28 +124,17 @@ function Welcome(): JSX.Element {
     const name = folder.split('/').pop()?.replace(/\.blockout$/, '') ?? 'Untitled'
     newProject(folder, name)
     const json = currentProjectJson()
-    if (json) await window.blockout.saveProject(folder, json)
-  }, [newProject])
+    if (json) {
+      await window.blockout.saveProject(folder, json)
+      await rememberFolder(folder)
+    }
+  }, [newProject, rememberFolder])
 
   const onOpen = useCallback(async () => {
     const folder = await window.blockout.openProjectDialog()
     if (!folder) return
-    const { json, backupJson, backupNewer } = await window.blockout.loadProject(folder)
-    if (!json && !backupJson) {
-      toast('No project.json found in that folder.', 'error')
-      return
-    }
-    // A meaningfully-newer autosave means the app died with unsaved work —
-    // restore it (undo history is fresh either way; ⌘S makes it permanent).
-    if (backupNewer && backupJson && loadFromJson(folder, backupJson)) {
-      toast('Restored unsaved work from the autosave backup — Save to keep it.', 'success')
-      return
-    }
-    if (json && loadFromJson(folder, json)) return
-    if (backupJson && loadFromJson(folder, backupJson)) {
-      toast('Recovered from autosave backup.', 'success')
-    }
-  }, [loadFromJson, toast])
+    await loadFolder(folder)
+  }, [loadFolder])
 
   return (
     <div className="welcome">
@@ -104,10 +148,11 @@ function Welcome(): JSX.Element {
         motion-reference packages for AI video generators.
       </p>
       <div className="actions">
-        <button className="btn primary" onClick={onNew}>
+        {reopening && <span style={{ color: 'var(--text-faint)' }}>Opening last project…</span>}
+        <button className="btn primary" onClick={onNew} disabled={reopening}>
           New Project
         </button>
-        <button className="btn" onClick={onOpen}>
+        <button className="btn" onClick={onOpen} disabled={reopening}>
           Open Project…
         </button>
         <button className="btn" onClick={() => useStore.getState().setHelpOpen(true)}>

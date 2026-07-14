@@ -8,6 +8,9 @@ import { contextBridge, ipcRenderer } from 'electron'
 export interface BlockoutAPI {
   newProjectDialog(): Promise<string | null>
   openProjectDialog(): Promise<string | null>
+  getLastProject(): Promise<string | null>
+  rememberLastProject(folder: string): Promise<boolean>
+  clearLastProject(): Promise<boolean>
   pickFile(filters: { name: string; extensions: string[] }[]): Promise<string | null>
   saveProject(folder: string, json: string): Promise<boolean>
   saveBackup(folder: string, json: string): Promise<boolean>
@@ -71,6 +74,9 @@ export interface BlockoutAPI {
 const api: BlockoutAPI = {
   newProjectDialog: () => ipcRenderer.invoke('dialog:newProject'),
   openProjectDialog: () => ipcRenderer.invoke('dialog:openProject'),
+  getLastProject: () => ipcRenderer.invoke('project:getLast'),
+  rememberLastProject: (folder) => ipcRenderer.invoke('project:rememberLast', folder),
+  clearLastProject: () => ipcRenderer.invoke('project:clearLast'),
   pickFile: (filters) => ipcRenderer.invoke('dialog:pickFile', filters),
   saveProject: (folder, json) => ipcRenderer.invoke('project:save', folder, json),
   saveBackup: (folder, json) => ipcRenderer.invoke('project:saveBackup', folder, json),

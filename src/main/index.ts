@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile, copyFile, access, stat, rm } from 'fs/promi
 import { join, dirname, basename, extname, resolve, sep } from 'path'
 import { registerPresetsIpc } from './presets'
 import { startControlServer } from './control'
+import { clearRecentProject, readRecentProject, writeRecentProject } from './recent-project'
 // Inlined at build time — app.getVersion() reports Electron's own version
 // when launched unpackaged (e2e runs `electron out/main/index.js`).
 import { version as APP_VERSION } from '../../package.json'
@@ -95,6 +96,24 @@ async function resolveFfmpeg(): Promise<string> {
 }
 
 /* --------------------------------- IPC ---------------------------------- */
+
+function recentProjectPath(): string {
+  return join(app.getPath('userData'), 'last-project.json')
+}
+
+ipcMain.handle('project:getLast', async () => {
+  return await readRecentProject(recentProjectPath())
+})
+
+ipcMain.handle('project:rememberLast', async (_e, folder: string) => {
+  await writeRecentProject(recentProjectPath(), folder)
+  return true
+})
+
+ipcMain.handle('project:clearLast', async () => {
+  await clearRecentProject(recentProjectPath())
+  return true
+})
 
 ipcMain.handle('dialog:newProject', async () => {
   // Smoke-test hook: bypass the native dialog so CI can drive the app.
